@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+discute.db
+.streamlit/secrets.toml
+.env
+.claude/
