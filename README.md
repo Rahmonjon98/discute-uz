@@ -46,6 +46,21 @@ Brauzerda ochilgan sahifada:
 > Maslahat: API kalitini har safar kiritmaslik uchun uni `GROQ_API_KEY`
 > muhit o'zgaruvchisiga saqlab qo'yishingiz mumkin.
 
+## Telefonda ishlatish (Streamlit Community Cloud)
+
+1. [share.streamlit.io](https://share.streamlit.io) ga GitHub akkauntingiz bilan kiring
+2. **Create app** → repository: `Rahmonjon98/discute-uz`, branch: `master`, main file: `app.py`
+3. **Advanced settings → Secrets** maydoniga API kalitingizni kiriting:
+
+   ```toml
+   GROQ_API_KEY = "gsk_..."
+   ```
+
+4. **Deploy** tugmasini bosing — bir necha daqiqada `https://...streamlit.app` manzili tayyor bo'ladi
+
+> Eslatma: serverda SQLite vaqtinchalik saqlanadi — dastur qayta ishga tushganda
+> statistika tarixi tozalanadi. Suhbatning o'ziga bu ta'sir qilmaydi.
+
 ## Texnologiyalar
 
 | Vazifa | Texnologiya |
