@@ -6,6 +6,7 @@ Ishga tushirish:  streamlit run app.py
 import os
 
 import streamlit as st
+import streamlit.components.v1 as components
 from groq import AuthenticationError, RateLimitError
 
 from src import database, tts
@@ -272,6 +273,34 @@ def render_chat_screen() -> None:
         key=f"audio_input_{st.session_state.audio_key}",
     )
     typed_text = st.chat_input("Yoki javobingizni shu yerga yozing...")
+
+    # Telefonda brauzer autoplay'ni kechiktirib, mikrofon bosilganda AI ovozini
+    # qayta ijro qiladi va u yozuvga tushib qoladi. Yechim: mikrofon vidjetiga
+    # har tegilganda sahifadagi barcha audio to'xtatiladi (3 soniya davomida
+    # qayta urinishlar ham bosiladi).
+    components.html(
+        """<script>
+        const doc = window.parent.document;
+        if (!doc._discuteAudioGuard) {
+            doc._discuteAudioGuard = true;
+            const killAudio = () => doc.querySelectorAll('audio').forEach(a => {
+                a.removeAttribute('autoplay');
+                if (!a.paused) a.pause();
+            });
+            doc.addEventListener('pointerdown', (e) => {
+                if (e.target.closest('[data-testid="stAudioInput"]')) {
+                    killAudio();
+                    let n = 0;
+                    const iv = setInterval(() => {
+                        killAudio();
+                        if (++n >= 20) clearInterval(iv);
+                    }, 150);
+                }
+            }, true);
+        }
+        </script>""",
+        height=0,
+    )
 
     # Muvaffaqiyatda rerun qilamiz; xatolikda esa qilmaymiz — aks holda
     # st.error xabari yangi ishga tushirishda yo'qolib ketadi
