@@ -10,7 +10,7 @@ import streamlit.components.v1 as components
 from groq import AuthenticationError, RateLimitError
 
 from src import database, tts
-from src.config import CHAT_MODELS, LEVELS, VOICES
+from src.config import LANGUAGE_CONFIG, LANGUAGE_LABELS, LANGUAGES, LEVELS
 from src.groq_client import (
     chat_turn,
     generate_random_scenario,
@@ -31,6 +31,7 @@ DEFAULTS = {
     "scenario_title": None,
     "system_prompt": None,
     "level": None,
+    "language": "en",          # faol suhbat tili (til kodi)
     "audio_key": 0,            # audio_input widgetini tozalash uchun
     "play_next": False,        # oxirgi AI javobini bir marta avtoijro qilish
     "random_scenario": None,   # (title, setup) — 🎲 tugmasi natijasi
@@ -65,7 +66,7 @@ def show_api_error(error: Exception) -> None:
 # ---------------------------------------------------------------- sidebar
 with st.sidebar:
     st.title("🗣️ Discute UZ")
-    st.caption("AI bilan ingliz tilida gaplashib o'rganing")
+    st.caption("AI bilan chet tilida gaplashib o'rganing")
 
     page = st.radio(
         "Bo'lim",
@@ -74,17 +75,38 @@ with st.sidebar:
     )
     st.divider()
 
+    conversation_active = st.session_state.conversation_id is not None
+    # MUHIM: key va o'zgarmas help — bularsiz Streamlit widget kimligini
+    # help matni o'zgarganda yangidan hisoblab, tanlovni ingliz tiliga
+    # qaytarib yuboradi (suhbat boshlanganda til "sakrab ketish" xatosi)
+    lang_label = st.radio(
+        "O'rganiladigan til",
+        list(LANGUAGES),
+        horizontal=True,
+        key="language_choice",
+        disabled=conversation_active,
+        help="Til yangi suhbat boshlashdan oldin tanlanadi",
+    )
+    lang_code = LANGUAGES[lang_label]
+    lang_cfg = LANGUAGE_CONFIG[lang_code]
+
     api_key = st.text_input(
         "Groq API kaliti",
         value=os.environ.get("GROQ_API_KEY", ""),
         type="password",
         help="Bepul kalitni https://console.groq.com/keys sahifasidan oling (karta talab qilinmaydi)",
     )
-    model_label = st.selectbox("AI modeli", list(CHAT_MODELS))
-    chat_model = CHAT_MODELS[model_label]
+    # Model va ovoz ro'yxatlari tanlangan tilga moslanadi; key til kodiga
+    # bog'langani uchun ro'yxat almashganda eski qiymat adashib qolmaydi
+    model_label = st.selectbox(
+        "AI modeli", list(lang_cfg["chat_models"]), key=f"model_{lang_code}"
+    )
+    chat_model = lang_cfg["chat_models"][model_label]
 
-    voice_label = st.selectbox("AI ovozi", list(VOICES))
-    voice = VOICES[voice_label]
+    voice_label = st.selectbox(
+        "AI ovozi", list(lang_cfg["voices"]), key=f"voice_{lang_code}"
+    )
+    voice = lang_cfg["voices"][voice_label]
     tts_enabled = st.toggle("Javoblarni ovozda eshitish", value=True)
 
     if st.session_state.conversation_id is not None:
@@ -98,7 +120,9 @@ with st.sidebar:
 def start_conversation(scenario_title: str, scenario_setup: str, level_label: str) -> None:
     """Suhbatni ochadi: AI birinchi bo'lib gapiradi."""
     client = get_client(api_key)
-    system_prompt = build_system_prompt(scenario_setup, LEVELS[level_label])
+    system_prompt = build_system_prompt(
+        scenario_setup, LEVELS[level_label], lang_cfg["name_en"], lang_cfg["grammar_focus"]
+    )
 
     with st.spinner("🤖 AI suhbatni boshlamoqda..."):
         result = chat_turn(
@@ -109,13 +133,14 @@ def start_conversation(scenario_title: str, scenario_setup: str, level_label: st
         )
         audio = tts.synthesize(result["reply"], voice) if tts_enabled else None
 
-    conversation_id = database.create_conversation(scenario_title, level_label)
+    conversation_id = database.create_conversation(scenario_title, level_label, lang_code)
     database.save_message(conversation_id, "assistant", result["reply"])
 
     st.session_state.conversation_id = conversation_id
     st.session_state.scenario_title = scenario_title
     st.session_state.system_prompt = system_prompt
     st.session_state.level = level_label
+    st.session_state.language = lang_code
     st.session_state.messages = [
         {"role": "assistant", "content": result["reply"], "audio": audio}
     ]
@@ -125,6 +150,22 @@ def start_conversation(scenario_title: str, scenario_setup: str, level_label: st
 def process_turn(user_text: str) -> None:
     """Talabaning gapini qayta ishlaydi: AI javobi + xatolar tahlili + ovoz."""
     client = get_client(api_key)
+
+    # Himoya: suhbat davomida model va ovoz suhbat BOSHLANGAN til bo'yicha
+    # olinadi — yon panel qandaydir sabab bilan boshqa tilda qolib ketsa ham,
+    # ruscha suhbat inglizcha ovozda o'qilmasin
+    active_cfg = LANGUAGE_CONFIG[st.session_state.language]
+    active_model = (
+        chat_model
+        if chat_model in active_cfg["chat_models"].values()
+        else next(iter(active_cfg["chat_models"].values()))
+    )
+    active_voice = (
+        voice
+        if voice in active_cfg["voices"].values()
+        else next(iter(active_cfg["voices"].values()))
+    )
+
     history = [
         {"role": m["role"], "content": m["content"]}
         for m in st.session_state.messages
@@ -132,12 +173,12 @@ def process_turn(user_text: str) -> None:
     history.append({"role": "user", "content": user_text})
 
     with st.spinner("🤖 AI javob yozmoqda..."):
-        result = chat_turn(client, chat_model, st.session_state.system_prompt, history)
+        result = chat_turn(client, active_model, st.session_state.system_prompt, history)
 
     audio = None
     if tts_enabled and result["reply"]:
         with st.spinner("🔊 Ovoz tayyorlanmoqda..."):
-            audio = tts.synthesize(result["reply"], voice)
+            audio = tts.synthesize(result["reply"], active_voice)
 
     corrected = result["corrected"] if result["has_errors"] else ""
     explanation = result["explanation"] if result["has_errors"] else ""
@@ -173,8 +214,9 @@ def process_turn(user_text: str) -> None:
 def render_setup_screen() -> None:
     st.header("💬 Yangi suhbat")
     st.write(
-        "Ssenariy va darajani tanlang — AI shu vaziyatda siz bilan inglizcha "
-        "suhbat quradi, har bir gapingizdagi xatolarni o'zbekcha tushuntirib beradi."
+        f"Ssenariy va darajani tanlang — AI shu vaziyatda siz bilan "
+        f"{lang_cfg['name_uz']}cha suhbat quradi, har bir gapingizdagi "
+        f"xatolarni o'zbekcha tushuntirib beradi."
     )
 
     level_label = st.select_slider("Darajangiz", options=list(LEVELS), value=list(LEVELS)[1])
@@ -204,7 +246,7 @@ def render_setup_screen() -> None:
                 try:
                     with st.spinner("Ssenariy o'ylab topilmoqda..."):
                         st.session_state.random_scenario = generate_random_scenario(
-                            get_client(api_key), chat_model
+                            get_client(api_key), chat_model, lang_cfg["name_en"]
                         )
                 except Exception as error:
                     show_api_error(error)
@@ -238,7 +280,10 @@ def render_setup_screen() -> None:
 
 def render_chat_screen() -> None:
     st.subheader(st.session_state.scenario_title)
-    st.caption(f"Daraja: {st.session_state.level} · Model: {model_label}")
+    st.caption(
+        f"Til: {LANGUAGE_LABELS[st.session_state.language]} · "
+        f"Daraja: {st.session_state.level} · Model: {model_label}"
+    )
 
     messages = st.session_state.messages
     last_index = len(messages) - 1
@@ -268,8 +313,10 @@ def render_chat_screen() -> None:
     st.session_state.play_next = False
 
     # ------------------------------------------------------------ kiritish
+    # Mikrofon yorlig'i suhbatning o'z tilidan olinadi (yon paneldan emas)
+    speak_word = LANGUAGE_CONFIG[st.session_state.language]["name_uz"].capitalize() + "cha"
     audio_recording = st.audio_input(
-        "🎙️ Inglizcha gapiring (mikrofon belgisini bosib yozib oling)",
+        f"🎙️ {speak_word} gapiring (mikrofon belgisini bosib yozib oling)",
         key=f"audio_input_{st.session_state.audio_key}",
     )
     typed_text = st.chat_input("Yoki javobingizni shu yerga yozing...")
@@ -320,7 +367,9 @@ def render_chat_screen() -> None:
         try:
             client = get_client(api_key)
             with st.spinner("🎧 Ovozingiz matnga o'girilmoqda..."):
-                text = transcribe_audio(client, audio_recording.read())
+                text = transcribe_audio(
+                    client, audio_recording.read(), language=st.session_state.language
+                )
             if text:
                 process_turn(text)
                 processed = True
@@ -351,12 +400,13 @@ def render_stats_page() -> None:
         return
 
     for m in mistakes:
+        lang_flag = LANGUAGE_LABELS.get(m.get("language") or "en", "").split(" ")[0]
         with st.expander(f"❌ {m['content'][:80]}"):
             st.markdown(f"**Siz aytdingiz:** {m['content']}")
             st.markdown(f"**To'g'ri varianti:** {m['corrected']}")
             if m["explanation"]:
                 st.markdown(f"**Izoh:** {m['explanation']}")
-            st.caption(f"{m['scenario']} · {m['created_at']}")
+            st.caption(f"{lang_flag} {m['scenario']} · {m['created_at']}")
 
 
 # ---------------------------------------------------------------- routing

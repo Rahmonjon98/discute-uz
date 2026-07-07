@@ -1,18 +1,21 @@
 # 🗣️ Discute UZ
 
-Ingliz tilida **gapirishni** mashq qilish dasturi. Siz mikrofonga inglizcha gapirasiz —
-AI sizga javob qaytaradi, xatolaringizni **o'zbek tilida** tushuntiradi va javobini
-ovozda o'qib beradi.
+Chet tilida **gapirishni** mashq qilish dasturi (🇬🇧 ingliz va 🇷🇺 rus tillari).
+Siz mikrofonga gapirasiz — AI sizga javob qaytaradi, xatolaringizni **o'zbek
+tilida** tushuntiradi va javobini ovozda o'qib beradi.
 
 [Discute](https://github.com/5uru/Discute) loyihasidan ilhomlanib yaratilgan.
 
 ## Imkoniyatlar
 
+- 🌍 **Ikki til** — ingliz yoki rus tilini tanlang; modellar, ovozlar va
+  interfeys avtomatik moslashadi
 - 🎙️ **Ovozli suhbat** — mikrofonga gapiring, Whisper (Groq) matnga o'giradi
 - 🤖 **Suhbat simulyatsiyasi** — restoran, aeroport, ish suhbati va boshqa ssenariylar
 - 🔍 **Xatolar tahlili** — grammatika va so'z tanlash xatolari o'zbekcha izoh bilan
+  (rus tilida kelishiklar, rod va fe'l turlari ham)
 - 🔊 **Ovozli javob** — AI javobini tabiiy ovozda eshitasiz (edge-tts)
-- 📊 **Statistika** — suhbatlar tarixi va xatolaringiz tahlili (SQLite)
+- 📊 **Statistika** — suhbatlar tarixi va xatolaringiz tahlili, til belgisi bilan (SQLite)
 - 🎚️ **3 daraja** — Beginner / Intermediate / Advanced
 
 ## O'rnatish
@@ -38,10 +41,10 @@ streamlit run app.py
 
 Brauzerda ochilgan sahifada:
 
-1. Chap panelga Groq API kalitingizni kiriting
+1. Chap panelda o'rganiladigan tilni tanlang va Groq API kalitingizni kiriting
 2. Darajangiz va ssenariyni tanlang
 3. "🚀 Suhbatni boshlash" tugmasini bosing
-4. Mikrofon belgisini bosib, inglizcha gapiring!
+4. Mikrofon belgisini bosib, tanlangan tilda gapiring!
 
 > Maslahat: API kalitini har safar kiritmaslik uchun uni `GROQ_API_KEY`
 > muhit o'zgaruvchisiga saqlab qo'yishingiz mumkin.
@@ -67,6 +70,6 @@ Brauzerda ochilgan sahifada:
 |---|---|
 | Interfeys | Streamlit |
 | Ovoz → matn | Whisper Large V3 Turbo (Groq API) |
-| Suhbat va xato tahlili | Llama 3.3 70B (Groq API) |
+| Suhbat va xato tahlili | Llama 3.3 70B — ingliz, GPT-OSS 120B — rus (Groq API) |
 | Matn → ovoz | edge-tts (zaxira: gTTS) |
 | Ma'lumotlar bazasi | SQLite |

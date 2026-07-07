@@ -16,16 +16,23 @@ def _connect() -> sqlite3.Connection:
 
 
 def init_db() -> None:
-    """Jadvallarni yaratadi (agar mavjud bo'lmasa)."""
+    """Jadvallarni yaratadi (agar mavjud bo'lmasa) va eski bazani yangilaydi."""
     with closing(_connect()) as conn, conn:
         conn.execute(
             """CREATE TABLE IF NOT EXISTS conversations (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 scenario TEXT NOT NULL,
                 level TEXT NOT NULL,
+                language TEXT NOT NULL DEFAULT 'en',
                 created_at TEXT NOT NULL
             )"""
         )
+        # Migratsiya: til ustuni bo'lmagan eski bazalarga qo'shamiz
+        columns = [row[1] for row in conn.execute("PRAGMA table_info(conversations)")]
+        if "language" not in columns:
+            conn.execute(
+                "ALTER TABLE conversations ADD COLUMN language TEXT NOT NULL DEFAULT 'en'"
+            )
         conn.execute(
             """CREATE TABLE IF NOT EXISTS messages (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -40,11 +47,12 @@ def init_db() -> None:
         )
 
 
-def create_conversation(scenario: str, level: str) -> int:
+def create_conversation(scenario: str, level: str, language: str = "en") -> int:
     with closing(_connect()) as conn, conn:
         cur = conn.execute(
-            "INSERT INTO conversations (scenario, level, created_at) VALUES (?, ?, ?)",
-            (scenario, level, datetime.now().isoformat(timespec="seconds")),
+            """INSERT INTO conversations (scenario, level, language, created_at)
+               VALUES (?, ?, ?, ?)""",
+            (scenario, level, language, datetime.now().isoformat(timespec="seconds")),
         )
         return cur.lastrowid
 
@@ -99,7 +107,7 @@ def get_recent_mistakes(limit: int = 20) -> list[dict]:
     with closing(_connect()) as conn, conn:
         rows = conn.execute(
             """SELECT m.content, m.corrected, m.explanation, m.created_at,
-                      c.scenario
+                      c.scenario, c.language
                FROM messages m
                JOIN conversations c ON c.id = m.conversation_id
                WHERE m.role = 'user' AND m.corrected != ''
